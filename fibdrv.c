@@ -17,7 +17,7 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 92
+#define MAX_LENGTH 93
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
@@ -26,7 +26,8 @@ static DEFINE_MUTEX(fib_mutex);
 
 static long long fib_sequence(long long k)
 {
-    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
+    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel.
+     */
     long long f[k + 2];
 
     f[0] = 0;
@@ -37,6 +38,60 @@ static long long fib_sequence(long long k)
     }
 
     return f[k];
+}
+
+static long long fast_doubling_recursive(int k)
+{
+    if (k <= 2) {
+        return k ? 1 : 0;
+    }
+    int n = k / 2;
+    long long a = fast_doubling_recursive(n);
+    long long b = fast_doubling_recursive(n + 1);
+    if (k % 2) {
+        return a * a + b * b;
+    }
+    return a * (2 * b - a);
+}
+
+static long long fast_doubling_iterative(long long k)
+{
+    if (k < 2) {
+        return k;
+    }
+    long long a = 0, b = 1;
+    for (unsigned int i = 1U << 15; i > 0; i >>= 1) {
+        long long t1 = a * (2 * b - a);
+        long long t2 = b * b + a * a;
+        if (k & i) {
+            a = t2;
+            b = t1 + t2;
+        } else {
+            a = t1;
+            b = t2;
+        }
+    }
+    return a;
+}
+
+static long long fast_doubling_iterative_clz(long long k)
+{
+    if (k < 2) {
+        return k;
+    }
+    long long a = 0, b = 1;
+    for (unsigned int i = 1U << (15 - __builtin_clz(k)); i; i >>= 1) {
+        long long t1 = a * (2 * b - a);
+        long long t2 = b * b + a * a;
+        if (k & i) {
+            a = t2;
+            b = t1 + t2;
+        } else {
+            a = t1;
+            b = t2;
+        }
+    }
+    return a;
 }
 
 static int fib_open(struct inode *inode, struct file *file)
@@ -60,7 +115,10 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
-    return (ssize_t) fib_sequence(*offset);
+    // return (ssize_t) fib_sequence(*offset);
+    // return (ssize_t) fast_doubling_recursive(*offset);
+    // return (ssize_t) fast_doubling_iterative(*offset);
+    return (ssize_t) fast_doubling_iterative_clz(*offset);
 }
 
 /* write operation is skipped */
