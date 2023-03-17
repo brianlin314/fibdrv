@@ -4,6 +4,7 @@
 #include <linux/init.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
+#include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 
@@ -17,7 +18,7 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 93
+#define MAX_LENGTH 92
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
@@ -127,7 +128,32 @@ static ssize_t fib_write(struct file *file,
                          size_t size,
                          loff_t *offset)
 {
-    return 1;
+    ktime_t kt;
+    switch (size) {
+    case 1:
+        kt = ktime_get();
+        fib_sequence(*offset);
+        kt = ktime_sub(ktime_get(), kt);
+        break;
+    case 2:
+        kt = ktime_get();
+        fast_doubling_recursive(*offset);
+        kt = ktime_sub(ktime_get(), kt);
+        break;
+    case 3:
+        kt = ktime_get();
+        fast_doubling_iterative(*offset);
+        kt = ktime_sub(ktime_get(), kt);
+        break;
+    case 4:
+        kt = ktime_get();
+        fast_doubling_iterative_clz(*offset);
+        kt = ktime_sub(ktime_get(), kt);
+        break;
+    default:
+        return 1;
+    }
+    return (ssize_t) ktime_to_ns(kt);
 }
 
 static loff_t fib_device_lseek(struct file *file, loff_t offset, int orig)
